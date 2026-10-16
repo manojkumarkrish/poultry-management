@@ -1,0 +1,325 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useFarm } from '@/lib/data/FarmContext';
+import { DailyEggRecord, convertEggsToTrays, calculateEggProductionPct } from '@/types/database';
+import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import ExportButtons from '@/components/ui/ExportButtons';
+import {
+  Egg,
+  Plus,
+  Search,
+  Filter,
+  Calendar,
+  Layers,
+  Sparkles,
+  BarChart3,
+} from 'lucide-react';
+
+export default function EggProductionPage() {
+  const { sheds, batches, dailyEggRecords, addDailyEggRecord, currentUser } = useFarm();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedShed, setSelectedShed] = useState<string>('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Form State
+  const layerSheds = sheds.filter((s) => s.shed_type === 'layer');
+  const [formData, setFormData] = useState({
+    collection_date: new Date().toISOString().split('T')[0],
+    shed_id: layerSheds[0]?.id || '',
+    total_eggs: 16500,
+    damaged_eggs: 110,
+    broken_eggs: 40,
+    notes: 'Morning and afternoon conveyor collections',
+  });
+
+  const activeShed = sheds.find((s) => s.id === formData.shed_id);
+  const activeBatch = batches.find((b) => b.current_shed_id === formData.shed_id);
+
+  // Calculations for today's egg statistics
+  const totalEggsCollected = dailyEggRecords.reduce((sum, r) => sum + r.total_eggs_collected, 0);
+  const totalGoodEggs = dailyEggRecords.reduce((sum, r) => sum + r.good_eggs, 0);
+  const totalTrays = convertEggsToTrays(totalGoodEggs);
+
+  // Filtered
+  const filteredRecords = dailyEggRecords.filter((r) => {
+    const matchesSearch =
+      r.shed_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.batch_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.collection_date.includes(searchTerm);
+    const matchesShed = selectedShed === 'all' || r.shed_id === selectedShed;
+    return matchesSearch && matchesShed;
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeShed || !activeBatch) return;
+
+    const good = Math.max(0, formData.total_eggs - formData.damaged_eggs - formData.broken_eggs);
+    const trayInfo = convertEggsToTrays(good);
+    const pct = calculateEggProductionPct(formData.total_eggs, activeBatch.current_count);
+
+    addDailyEggRecord({
+      collection_date: formData.collection_date,
+      shed_id: activeShed.id,
+      shed_code: activeShed.code,
+      batch_id: activeBatch.id,
+      batch_code: activeBatch.batch_code,
+      opening_layer_birds: activeBatch.current_count,
+      total_eggs_collected: Number(formData.total_eggs),
+      good_eggs: good,
+      damaged_eggs: Number(formData.damaged_eggs),
+      broken_eggs: Number(formData.broken_eggs),
+      rejected_eggs: 0,
+      trays_count: trayInfo.trays,
+      loose_eggs_count: trayInfo.loose,
+      production_percentage: pct,
+      notes: formData.notes,
+      entered_by: currentUser.id,
+    });
+
+    setIsModalOpen(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Egg className="w-6 h-6 text-amber-500" />
+            <span>Daily Egg Production</span>
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Strictly layer flock collections (L1–L5), opening bird count basis, and 30-egg tray conversion
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <ExportButtons data={dailyEggRecords} filename="egg-collections" />
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary gap-2">
+            <Plus className="w-4 h-4" />
+            <span>Log Egg Collection</span>
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Overview */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="stat-card">
+          <span className="text-xs font-semibold text-slate-500 uppercase">Total Eggs Collected</span>
+          <div className="text-2xl font-bold text-slate-900 mt-1">
+            {totalEggsCollected.toLocaleString()}
+          </div>
+          <span className="text-xs text-emerald-600 font-medium">Logged in system</span>
+        </div>
+        <div className="stat-card">
+          <span className="text-xs font-semibold text-slate-500 uppercase">Commercial Good Eggs</span>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">
+            {totalGoodEggs.toLocaleString()}
+          </div>
+          <span className="text-xs text-slate-500 font-medium">Grade A Table Eggs</span>
+        </div>
+        <div className="stat-card">
+          <span className="text-xs font-semibold text-slate-500 uppercase">Tray Conversion (30/tray)</span>
+          <div className="text-2xl font-bold text-slate-900 mt-1">
+            {totalTrays.trays.toLocaleString()} Trays
+          </div>
+          <span className="text-xs text-slate-500 font-medium">+ {totalTrays.loose} loose eggs</span>
+        </div>
+        <div className="stat-card">
+          <span className="text-xs font-semibold text-slate-500 uppercase">Layer Sheds Monitored</span>
+          <div className="text-2xl font-bold text-slate-900 mt-1">5 Sheds</div>
+          <span className="text-xs text-slate-500 font-medium">L1, L2, L3, L4, L5</span>
+        </div>
+      </div>
+
+      {/* Rearing Shed Rule Alert */}
+      <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 flex items-start gap-3">
+        <Sparkles className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-amber-900">
+          <strong>Poultry Rule Enforced:</strong> Egg production applies exclusively to mature Layer batches (Sheds L1 to L5).
+          Grower flocks (G1, G2) and Chick brooder (C1) are marked as <strong>N/A</strong> (not 0%) to prevent skewing lay performance averages.
+        </div>
+      </div>
+
+      {/* Filter and Search */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search date, shed, batch code..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="input-field pl-9 py-2 text-xs"
+          />
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Filter className="w-4 h-4 text-slate-400" />
+          <select
+            value={selectedShed}
+            onChange={(e) => setSelectedShed(e.target.value)}
+            className="input-field py-2 text-xs w-full sm:w-44"
+          >
+            <option value="all">All Layer Sheds</option>
+            {layerSheds.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code} ({s.name})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Records Table */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+        <table className="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+              <th className="py-3 px-4">Collection Date</th>
+              <th className="py-3 px-4">Shed & Flock</th>
+              <th className="py-3 px-4 text-right">Opening Birds</th>
+              <th className="py-3 px-4 text-right">Total Eggs</th>
+              <th className="py-3 px-4 text-right">Good Eggs</th>
+              <th className="py-3 px-4 text-right">Damaged/Broken</th>
+              <th className="py-3 px-4 text-right">Full Trays</th>
+              <th className="py-3 px-4 text-right">Loose Eggs</th>
+              <th className="py-3 px-4 text-right">Laying %</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filteredRecords.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="py-8 text-center text-slate-400 italic">
+                  No independent egg collection entries logged yet. Use "Log Egg Collection" or submit daily logs.
+                </td>
+              </tr>
+            ) : (
+              filteredRecords.map((r) => (
+                <tr key={r.id} className="hover:bg-slate-50">
+                  <td className="py-3 px-4 font-semibold text-slate-800">{r.collection_date}</td>
+                  <td className="py-3 px-4">
+                    <span className="font-bold text-slate-900 bg-amber-50 text-amber-800 px-2 py-0.5 rounded">
+                      {r.shed_code}
+                    </span>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">{r.batch_code}</span>
+                  </td>
+                  <td className="py-3 px-4 text-right text-slate-600">
+                    {r.opening_layer_birds.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right font-bold text-slate-900">
+                    {r.total_eggs_collected.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right font-bold text-emerald-700">
+                    {r.good_eggs.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right text-rose-600">
+                    {(r.damaged_eggs + r.broken_eggs).toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right font-bold text-slate-800">
+                    {r.trays_count.toLocaleString()}
+                  </td>
+                  <td className="py-3 px-4 text-right text-slate-600">{r.loose_eggs_count}</td>
+                  <td className="py-3 px-4 text-right font-black text-emerald-700">
+                    {r.production_percentage}%
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Log Modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Log Layer Egg Collection"
+        subtitle="Record daily harvest from automated egg belts or manual collection carts"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="input-label">Collection Date</label>
+              <input
+                type="date"
+                value={formData.collection_date}
+                onChange={(e) => setFormData({ ...formData, collection_date: e.target.value })}
+                required
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="input-label">Layer Shed</label>
+              <select
+                value={formData.shed_id}
+                onChange={(e) => setFormData({ ...formData, shed_id: e.target.value })}
+                className="input-field font-semibold"
+              >
+                {layerSheds.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.code} — {s.name} [Live: {s.current_birds.toLocaleString()}]
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="input-label">Total Eggs</label>
+              <input
+                type="number"
+                value={formData.total_eggs}
+                onChange={(e) => setFormData({ ...formData, total_eggs: Number(e.target.value) })}
+                min="0"
+                required
+                className="input-field font-bold text-base"
+              />
+            </div>
+            <div>
+              <label className="input-label">Damaged Eggs</label>
+              <input
+                type="number"
+                value={formData.damaged_eggs}
+                onChange={(e) => setFormData({ ...formData, damaged_eggs: Number(e.target.value) })}
+                min="0"
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="input-label">Broken Shells</label>
+              <input
+                type="number"
+                value={formData.broken_eggs}
+                onChange={(e) => setFormData({ ...formData, broken_eggs: Number(e.target.value) })}
+                min="0"
+                className="input-field"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="input-label">Notes</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              rows={2}
+              className="input-field"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              Post Collection
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </div>
+  );
+}
