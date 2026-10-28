@@ -16,7 +16,7 @@ VALUES (
 INSERT INTO user_profiles (id, farm_id, email, full_name, role, phone, is_active)
 VALUES 
 (
-    'u0000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     'owner@kasthuripoultry.com',
     'Kasthuri R. (Owner/Admin)',
@@ -25,7 +25,7 @@ VALUES
     true
 ),
 (
-    'u0000000-0000-0000-0000-000000000002',
+    '10000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
     'manager.layer@kasthuripoultry.com',
     'Suresh Kumar (Shed Operations Manager)',
@@ -40,7 +40,7 @@ INSERT INTO manager_visibility_settings (
     profit_loss, customer_supplier_accounts, purchase_and_payments,
     detailed_reports_export, historical_data_access, shed_level_restrictions_enabled, approval_required_for_sensitive
 ) VALUES (
-    'm0000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
     true,   -- farm_analytics
     false,  -- financial_dashboard
@@ -57,27 +57,27 @@ INSERT INTO manager_visibility_settings (
 -- 4. 8 Physical Sheds: L1, L2, L3, L4, L5 (Layer), G1, G2 (Grower), C1 (Chick)
 INSERT INTO sheds (id, farm_id, code, name, shed_type, capacity, current_birds, status, location, notes)
 VALUES
-('s0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'L1', 'Layer Shed 1', 'layer', 18000, 17400, 'active', 'East Wing Bay-1', 'Automated nipple drinkers & conveyor egg collection'),
-('s0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'L2', 'Layer Shed 2', 'layer', 18000, 17250, 'active', 'East Wing Bay-2', 'Automated nipple drinkers & manual egg collection'),
-('s0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'L3', 'Layer Shed 3', 'layer', 18000, 17600, 'active', 'East Wing Bay-3', 'Automated climate ventilation'),
-('s0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'L4', 'Layer Shed 4', 'layer', 18000, 17800, 'active', 'West Wing Bay-1', 'Tunnel ventilation system'),
-('s0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'L5', 'Layer Shed 5', 'layer', 18000, 17100, 'active', 'West Wing Bay-2', 'Conveyor egg collector, mature flock'),
-('s0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'G1', 'Grower Shed 1', 'grower', 6000, 5800, 'active', 'North Rearing Bay-1', 'Deep litter rearing system with automatic pan feeders'),
-('s0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'G2', 'Grower Shed 2', 'grower', 4000, 3920, 'active', 'North Rearing Bay-2', 'Pre-lay grower batch'),
-('s0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000001', 'C1', 'Chick Brooding Shed', 'chick', 3000, 2980, 'active', 'South Brooder Bay', 'Controlled infrared brooder heating & gas canopy')
+('30000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'L1', 'Layer Shed 1', 'layer', 18000, 17400, 'active', 'East Wing Bay-1', 'Automated nipple drinkers & conveyor egg collection'),
+('30000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'L2', 'Layer Shed 2', 'layer', 18000, 17250, 'active', 'East Wing Bay-2', 'Automated nipple drinkers & manual egg collection'),
+('30000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'L3', 'Layer Shed 3', 'layer', 18000, 17600, 'active', 'East Wing Bay-3', 'Automated climate ventilation'),
+('30000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'L4', 'Layer Shed 4', 'layer', 18000, 17800, 'active', 'West Wing Bay-1', 'Tunnel ventilation system'),
+('30000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'L5', 'Layer Shed 5', 'layer', 18000, 17100, 'active', 'West Wing Bay-2', 'Conveyor egg collector, mature flock'),
+('30000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'G1', 'Grower Shed 1', 'grower', 6000, 5800, 'active', 'North Rearing Bay-1', 'Deep litter rearing system with automatic pan feeders'),
+('30000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'G2', 'Grower Shed 2', 'grower', 4000, 3920, 'active', 'North Rearing Bay-2', 'Pre-lay grower batch'),
+('30000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000001', 'C1', 'Chick Brooding Shed', 'chick', 3000, 2980, 'active', 'South Brooder Bay', 'Controlled infrared brooder heating & gas canopy')
 ON CONFLICT (code) DO UPDATE SET capacity = EXCLUDED.capacity, current_birds = EXCLUDED.current_birds;
 
 -- 5. Batches in Production (Totaling ~99,850 live birds across all 8 sheds)
 INSERT INTO batches (id, farm_id, batch_code, name, bird_type, stage, current_shed_id, purchase_date, initial_count, current_count, age_days, cost_per_bird, purchase_cost, supplier_hatchery, status)
 VALUES
-('b0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L1-2026', 'Flock 2026-Alpha (L1)', 'BV300 White Leghorn', 'layer', 's0000000-0000-0000-0000-000000000001', '2026-03-20', 18000, 17400, 210, 48.00, 864000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L2-2026', 'Flock 2026-Beta (L2)', 'BV300 White Leghorn', 'layer', 's0000000-0000-0000-0000-000000000002', '2026-04-05', 18000, 17250, 195, 48.00, 864000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L3-2026', 'Flock 2026-Gamma (L3)', 'BV300 White Leghorn', 'layer', 's0000000-0000-0000-0000-000000000003', '2026-04-30', 18000, 17600, 170, 49.00, 882000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L4-2026', 'Flock 2026-Delta (L4)', 'Lohmann Brown Classic', 'layer', 's0000000-0000-0000-0000-000000000004', '2026-05-30', 18000, 17800, 140, 52.00, 936000.00, 'Suguna Breeding Farms', 'active'),
-('b0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L5-2026', 'Flock 2025-Epsilon (L5)', 'BV300 White Leghorn', 'layer', 's0000000-0000-0000-0000-000000000005', '2026-02-20', 18000, 17100, 240, 47.00, 846000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'BATCH-G1-2026', 'Grower Batch G1', 'BV300 White Leghorn', 'grower', 's0000000-0000-0000-0000-000000000006', '2026-08-02', 6000, 5800, 75, 48.00, 288000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'BATCH-G2-2026', 'Grower Batch G2', 'BV300 White Leghorn', 'grower', 's0000000-0000-0000-0000-000000000007', '2026-08-22', 4000, 3920, 55, 48.00, 192000.00, 'Venkateshwara Hatcheries', 'active'),
-('b0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000001', 'BATCH-C1-2026', 'Chick Brooder Batch C1', 'BV300 White Leghorn', 'chick', 's0000000-0000-0000-0000-000000000008', '2026-10-04', 3000, 2980, 12, 48.00, 144000.00, 'Venkateshwara Hatcheries', 'active')
+('40000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L1-2026', 'Flock 2026-Alpha (L1)', 'BV300 White Leghorn', 'layer', '30000000-0000-0000-0000-000000000001', '2026-03-20', 18000, 17400, 210, 48.00, 864000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L2-2026', 'Flock 2026-Beta (L2)', 'BV300 White Leghorn', 'layer', '30000000-0000-0000-0000-000000000002', '2026-04-05', 18000, 17250, 195, 48.00, 864000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L3-2026', 'Flock 2026-Gamma (L3)', 'BV300 White Leghorn', 'layer', '30000000-0000-0000-0000-000000000003', '2026-04-30', 18000, 17600, 170, 49.00, 882000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L4-2026', 'Flock 2026-Delta (L4)', 'Lohmann Brown Classic', 'layer', '30000000-0000-0000-0000-000000000004', '2026-05-30', 18000, 17800, 140, 52.00, 936000.00, 'Suguna Breeding Farms', 'active'),
+('40000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000001', 'BATCH-L5-2026', 'Flock 2025-Epsilon (L5)', 'BV300 White Leghorn', 'layer', '30000000-0000-0000-0000-000000000005', '2026-02-20', 18000, 17100, 240, 47.00, 846000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000001', 'BATCH-G1-2026', 'Grower Batch G1', 'BV300 White Leghorn', 'grower', '30000000-0000-0000-0000-000000000006', '2026-08-02', 6000, 5800, 75, 48.00, 288000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000001', 'BATCH-G2-2026', 'Grower Batch G2', 'BV300 White Leghorn', 'grower', '30000000-0000-0000-0000-000000000007', '2026-08-22', 4000, 3920, 55, 48.00, 192000.00, 'Venkateshwara Hatcheries', 'active'),
+('40000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000001', 'BATCH-C1-2026', 'Chick Brooder Batch C1', 'BV300 White Leghorn', 'chick', '30000000-0000-0000-0000-000000000008', '2026-10-04', 3000, 2980, 12, 48.00, 144000.00, 'Venkateshwara Hatcheries', 'active')
 ON CONFLICT (batch_code) DO NOTHING;
 
 -- 6. Feed Ingredients
