@@ -29,6 +29,29 @@ export interface ManagerVisibilitySettings {
   historical_data_access: boolean;
   shed_level_restrictions_enabled: boolean;
   approval_required_for_sensitive: boolean;
+  // Admin-controlled editing & deletion permissions
+  allow_editing_records: boolean;
+  allow_deleting_eligible_records: boolean;
+  allow_editing_historical_records: boolean;
+  require_approval_for_historical_edits: boolean;
+  require_approval_for_sensitive_deletions: boolean;
+}
+
+export interface FarmProfile {
+  farm_name: string; // "KASTHURI POULTRY FARM"
+  tagline?: string;
+  address: string;
+  phone: string;
+  email: string;
+  gstin: string;
+  pan_number?: string;
+  state_code?: string;
+  bank_name?: string;
+  bank_account_no?: string;
+  bank_ifsc?: string;
+  bank_branch?: string;
+  fy_start_month?: number; // 1 to 12 (default 4 for April in India)
+  timezone?: string; // e.g. "Asia/Kolkata"
 }
 
 export interface Shed {
@@ -78,6 +101,7 @@ export interface BatchMovement {
   movement_date: string;
   reason: string;
   authorized_by: string;
+  movement_status?: 'active' | 'reversed';
   created_at: string;
 }
 
@@ -109,6 +133,8 @@ export interface DailyBirdRecord {
   entered_by: string;
   entered_by_name: string;
   submitted_at: string;
+  updated_at?: string;
+  last_modified_by?: string;
   is_draft: boolean;
   status: 'draft' | 'submitted' | 'approved';
 }
@@ -164,6 +190,10 @@ export interface FeedProduction {
     cost: number;
   }[];
   recorded_by: string;
+  production_status?: 'active' | 'cancelled';
+  status?: 'active' | 'cancelled';
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -180,6 +210,8 @@ export interface FeedIssue {
   net_consumed_kg: number;
   authorized_by: string;
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
 }
 
 export interface WarehouseStockItem {
@@ -213,6 +245,8 @@ export interface DailyEggRecord {
   production_percentage: number; // (total_eggs_collected / opening_layer_birds) * 100
   notes?: string;
   entered_by: string;
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -226,6 +260,7 @@ export interface Customer {
   current_balance: number; // Positive = customer owes farm
   credit_limit: number;
   address?: string;
+  updated_at?: string;
 }
 
 export interface EggSale {
@@ -248,6 +283,10 @@ export interface EggSale {
   payment_status: PaymentStatus;
   payment_mode?: 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'credit';
   notes?: string;
+  sale_status?: 'active' | 'cancelled';
+  status?: 'active' | 'cancelled';
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -273,6 +312,10 @@ export interface BirdSale {
   outstanding_amount: number;
   payment_status: PaymentStatus;
   notes?: string;
+  sale_status?: 'active' | 'cancelled';
+  status?: 'active' | 'cancelled';
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -286,6 +329,7 @@ export interface Supplier {
   opening_balance: number;
   current_balance: number; // Positive = farm owes supplier
   address?: string;
+  updated_at?: string;
 }
 
 export interface SupplierBill {
@@ -300,7 +344,10 @@ export interface SupplierBill {
   paid_amount: number;
   outstanding_amount: number;
   payment_status: PaymentStatus;
+  bill_status?: 'active' | 'cancelled';
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -316,8 +363,11 @@ export interface PaymentTransaction {
   payment_mode: 'cash' | 'bank_transfer' | 'upi' | 'cheque';
   reference_no?: string;
   allocated_invoice_or_bill_id?: string;
+  payment_status_flag?: 'active' | 'cancelled';
   notes?: string;
   recorded_by: string;
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -346,6 +396,8 @@ export interface ExpenseRecord {
   batch_code?: string;
   notes?: string;
   is_accrual: boolean; // false = cash, true = accrued
+  updated_at?: string;
+  last_modified_by?: string;
   created_at: string;
 }
 
@@ -364,6 +416,8 @@ export interface ElectricityBill {
   paid_date?: string;
   status: PaymentStatus;
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
 }
 
 export interface EmployeeSalary {
@@ -378,6 +432,8 @@ export interface EmployeeSalary {
   net_salary: number;
   payment_status: PaymentStatus;
   payment_date?: string;
+  updated_at?: string;
+  last_modified_by?: string;
 }
 
 export interface VaccinationSchedule {
@@ -404,6 +460,9 @@ export interface VaccinationRecord {
   cost: number;
   administered_by: string;
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
+  created_at?: string;
 }
 
 export interface HealthEvent {
@@ -423,6 +482,9 @@ export interface HealthEvent {
   follow_up_date?: string;
   responsible_person: string;
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
+  created_at?: string;
 }
 
 export interface WeightRecord {
@@ -440,6 +502,9 @@ export interface WeightRecord {
   difference_grams: number; // avg - target
   age_days: number;
   notes?: string;
+  updated_at?: string;
+  last_modified_by?: string;
+  created_at?: string;
 }
 
 export interface ApprovalRequest {

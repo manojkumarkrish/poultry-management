@@ -6,7 +6,7 @@
 INSERT INTO farms (id, name, capacity_target, address, currency)
 VALUES (
     'a0000000-0000-0000-0000-000000000001',
-    'Balaji Commercial Poultry Complex',
+    'Kasthuri Poultry Farm',
     100000,
     'NH-44 Poultry Corridor, Namakkal District, Tamil Nadu',
     'INR'
@@ -18,8 +18,8 @@ VALUES
 (
     'u0000000-0000-0000-0000-000000000001',
     'a0000000-0000-0000-0000-000000000001',
-    'owner@balajipoultry.com',
-    'Rajesh Balaji (Owner/Admin)',
+    'owner@kasthuripoultry.com',
+    'Kasthuri R. (Owner/Admin)',
     'owner_admin',
     '+91 98450 11223',
     true
@@ -27,7 +27,7 @@ VALUES
 (
     'u0000000-0000-0000-0000-000000000002',
     'a0000000-0000-0000-0000-000000000001',
-    'manager@balajipoultry.com',
+    'manager.layer@kasthuripoultry.com',
     'Suresh Kumar (Shed Operations Manager)',
     'manager',
     '+91 98450 44556',

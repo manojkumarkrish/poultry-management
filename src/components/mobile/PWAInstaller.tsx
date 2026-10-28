@@ -10,16 +10,29 @@ export default function PWAInstaller() {
   const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
-    // Register Service Worker
+    // Register or unregister Service Worker
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => {
-          console.log('Poultry PWA Service Worker registered:', reg.scope);
-        })
-        .catch((err) => {
-          console.warn('SW registration failed:', err);
+      if (process.env.NODE_ENV === 'development') {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
+          }
         });
+        if ('caches' in window) {
+          caches.keys().then((names) => {
+            for (const name of names) caches.delete(name);
+          });
+        }
+      } else {
+        navigator.serviceWorker
+          .register('/sw.js')
+          .then((reg) => {
+            console.log('Poultry PWA Service Worker registered:', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('SW registration failed:', err);
+          });
+      }
     }
 
     // Check if already in standalone app mode
@@ -75,20 +88,20 @@ export default function PWAInstaller() {
     <>
       {/* Android / Desktop Chrome Install Banner */}
       {showInstallBanner && deferredPrompt && (
-        <div className="fixed bottom-20 left-4 right-4 sm:bottom-6 sm:right-6 sm:left-auto sm:w-96 z-50 bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-emerald-500/30 flex items-center justify-between gap-3 animate-slide-up">
+        <div className="fixed bottom-20 left-4 right-4 sm:bottom-6 sm:right-6 sm:left-auto sm:w-96 z-50 bg-slate-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center justify-between gap-3 animate-slide-up">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-xl flex-shrink-0 shadow-md">
-              🐔
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-extrabold text-xs text-white flex-shrink-0 shadow-md">
+              KPF
             </div>
             <div>
               <div className="text-xs font-bold text-white flex items-center gap-1.5">
-                <span>Install Mobile App</span>
-                <span className="text-[9px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.2 rounded font-mono">
-                  100K System
+                <span>Install KPF Android App</span>
+                <span className="text-[9px] bg-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded font-mono">
+                  100K Birds
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 mt-0.5">
-                Install on your phone home screen for fast 1-tap shed entries.
+                Add to your phone home screen for standalone window & fast shed logs.
               </p>
             </div>
           </div>
@@ -96,13 +109,13 @@ export default function PWAInstaller() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               onClick={handleInstallClick}
-              className="px-3 py-1.5 text-xs font-bold text-slate-900 bg-emerald-400 hover:bg-emerald-300 rounded-lg shadow-sm transition-colors"
+              className="px-3.5 py-2 text-xs font-bold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-xl shadow-md transition-colors cursor-pointer"
             >
               Install
             </button>
             <button
               onClick={handleDismiss}
-              className="p-1.5 text-slate-400 hover:text-white rounded-md"
+              className="p-1.5 text-slate-400 hover:text-white rounded-md cursor-pointer"
               aria-label="Dismiss banner"
             >
               <X className="w-4 h-4" />

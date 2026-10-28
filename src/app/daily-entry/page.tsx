@@ -3,7 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useFarm } from '@/lib/data/FarmContext';
 import { DailyBirdRecord, convertEggsToTrays, calculateClosingBirds } from '@/types/database';
+import { formatNumber } from '@/lib/utils/formatters';
 import Badge from '@/components/ui/Badge';
+import Modal from '@/components/ui/Modal';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 import {
   ClipboardPen,
   Calendar,
@@ -17,6 +20,8 @@ import {
   Thermometer,
   Droplets,
   HeartPulse,
+  Edit,
+  Trash2,
 } from 'lucide-react';
 
 export default function DailyFarmEntryPage() {
@@ -25,8 +30,12 @@ export default function DailyFarmEntryPage() {
     batches,
     dailyBirdRecords,
     addDailyBirdRecord,
+    updateDailyBirdRecord,
+    deleteDailyBirdRecord,
     currentUser,
     visibilitySettings,
+    canEdit,
+    canDelete,
   } = useFarm();
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -61,6 +70,76 @@ export default function DailyFarmEntryPage() {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  // Edit / Delete Record State
+  const [editingRecord, setEditingRecord] = useState<DailyBirdRecord | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [deleteTargetRecord, setDeleteTargetRecord] = useState<DailyBirdRecord | null>(null);
+  const [editRecordData, setEditRecordData] = useState({
+    opening_birds: 0,
+    birds_received: 0,
+    transfers_in: 0,
+    transfers_out: 0,
+    mortality: 0,
+    culls: 0,
+    bird_sales: 0,
+    other_removals: 0,
+    feed_consumed_kg: 0,
+    water_consumed_litres: 0,
+    egg_count: 0,
+    damaged_eggs: 0,
+    broken_eggs: 0,
+    health_observations: '',
+    notes: '',
+  });
+
+  const handleOpenEditRecord = (record: DailyBirdRecord) => {
+    setEditingRecord(record);
+    setEditRecordData({
+      opening_birds: record.opening_birds,
+      birds_received: record.birds_received || 0,
+      transfers_in: record.transfers_in || 0,
+      transfers_out: record.transfers_out || 0,
+      mortality: record.mortality,
+      culls: record.culls,
+      bird_sales: record.bird_sales,
+      other_removals: record.other_removals,
+      feed_consumed_kg: record.feed_consumed_kg,
+      water_consumed_litres: record.water_consumed_litres || 0,
+      egg_count: record.egg_count || 0,
+      damaged_eggs: record.damaged_eggs || 0,
+      broken_eggs: record.broken_eggs || 0,
+      health_observations: record.health_observations || '',
+      notes: record.notes || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEditRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+
+    const res = updateDailyBirdRecord(editingRecord.id, editRecordData);
+    if (!res.success) {
+      setFormError(res.error || 'Failed to update record.');
+    } else {
+      setFormSuccess(`Updated daily record for ${editingRecord.shed_code} (${editingRecord.record_date}) successfully.`);
+      setIsEditModalOpen(false);
+      setTimeout(() => setFormSuccess(null), 3500);
+    }
+  };
+
+  const handleConfirmDeleteRecord = () => {
+    if (!deleteTargetRecord) return;
+    const res = deleteDailyBirdRecord(deleteTargetRecord.id);
+    if (!res.success) {
+      setFormError(res.error || 'Failed to delete record.');
+    } else {
+      setFormSuccess(`Daily record for ${deleteTargetRecord.shed_code} (${deleteTargetRecord.record_date}) deleted and balances reverted.`);
+      setTimeout(() => setFormSuccess(null), 3500);
+    }
+    setDeleteTargetRecord(null);
+  };
 
   // When shed changes, auto-select corresponding batch and populate current birds as opening birds
   useEffect(() => {
@@ -176,7 +255,7 @@ export default function DailyFarmEntryPage() {
       setFormError(res.error || 'Failed to submit daily record.');
     } else {
       setFormSuccess(
-        `Daily log for ${activeShed!.code} (${recordDate}) saved successfully! Closing count: ${calculatedClosing.toLocaleString()} birds.`
+        `Daily log for ${activeShed!.code} (${recordDate}) saved successfully! Closing count: ${formatNumber(calculatedClosing)} birds.`
       );
       // reset losses for next entry
       setMortality(0);
@@ -194,7 +273,7 @@ export default function DailyFarmEntryPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <ClipboardPen className="w-6 h-6 text-emerald-600" />
-            <span>Daily Farm Log Entry</span>
+            <span>Kasthuri Poultry Farm — Daily Farm Log Entry</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Mobile-optimized daily recording of bird counts, mortality, feed intake, and egg collections
@@ -251,7 +330,7 @@ export default function DailyFarmEntryPage() {
             >
               {sheds.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.code} — {s.name} ({s.shed_type.toUpperCase()}) [Live: {s.current_birds.toLocaleString()}]
+                  {s.code} — {s.name} ({s.shed_type.toUpperCase()}) [Live: {formatNumber(s.current_birds)}]
                 </option>
               ))}
             </select>
@@ -353,7 +432,7 @@ export default function DailyFarmEntryPage() {
                 Calculated Closing Birds
               </span>
               <span className="text-xl font-black text-emerald-900 mt-0.5">
-                {calculatedClosing.toLocaleString()}
+                {formatNumber(calculatedClosing)}
               </span>
             </div>
           </div>
@@ -454,12 +533,12 @@ export default function DailyFarmEntryPage() {
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-600">Standard Conversion (30 eggs/tray):</span>
                 <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                  {trayConversion.trays.toLocaleString()} Full Trays
+                  {formatNumber(trayConversion.trays)} Full Trays
                 </span>
                 <span className="text-slate-400">+</span>
                 <span className="font-semibold text-slate-800">{trayConversion.loose} Loose Eggs</span>
               </div>
-              <span className="text-slate-500 font-medium">Good Eggs: {goodEggs.toLocaleString()}</span>
+              <span className="text-slate-500 font-medium">Good Eggs: {formatNumber(goodEggs)}</span>
             </div>
           </div>
         ) : (
@@ -561,6 +640,7 @@ export default function DailyFarmEntryPage() {
                   <th className="py-2.5 px-3">Feed (kg)</th>
                   <th className="py-2.5 px-3">Eggs Collected</th>
                   <th className="py-2.5 px-3">Logged By</th>
+                  <th className="py-2.5 px-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -568,14 +648,39 @@ export default function DailyFarmEntryPage() {
                   <tr key={r.id} className="hover:bg-slate-50">
                     <td className="py-2.5 px-3 font-medium text-slate-800">{r.record_date}</td>
                     <td className="py-2.5 px-3 font-bold text-slate-900">{r.shed_code}</td>
-                    <td className="py-2.5 px-3 text-slate-600">{r.opening_birds.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-slate-600">{formatNumber(r.opening_birds)}</td>
                     <td className="py-2.5 px-3 font-bold text-rose-600">{r.mortality}</td>
-                    <td className="py-2.5 px-3 font-bold text-emerald-700">{r.closing_birds.toLocaleString()}</td>
-                    <td className="py-2.5 px-3">{r.feed_consumed_kg.toLocaleString()} kg</td>
+                    <td className="py-2.5 px-3 font-bold text-emerald-700">{formatNumber(r.closing_birds)}</td>
+                    <td className="py-2.5 px-3">{formatNumber(r.feed_consumed_kg)} kg</td>
                     <td className="py-2.5 px-3">
-                      {r.egg_count ? `${r.egg_count.toLocaleString()} eggs` : 'N/A'}
+                      {r.egg_count ? `${formatNumber(r.egg_count)} eggs` : 'N/A'}
                     </td>
                     <td className="py-2.5 px-3 text-slate-500">{r.entered_by_name}</td>
+                    <td className="py-2.5 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {canEdit(r.record_date) && (
+                          <button
+                            onClick={() => handleOpenEditRecord(r)}
+                            className="p-1 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                            title="Edit daily entry"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete(true) && (
+                          <button
+                            onClick={() => setDeleteTargetRecord(r)}
+                            className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                            title="Delete daily entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {!canEdit(r.record_date) && !canDelete(true) && (
+                          <span className="text-[10px] text-slate-400 italic">Locked</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -583,6 +688,182 @@ export default function DailyFarmEntryPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Daily Record Modal */}
+      {editingRecord && (
+        <Modal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          title={`Edit Daily Record — ${editingRecord.shed_code} (${editingRecord.record_date})`}
+          subtitle="Update bird counts, feed, or egg collection figures with live reconciliation"
+          maxWidth="lg"
+        >
+          <form onSubmit={handleSaveEditRecord} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="input-label">Opening Birds</label>
+                <input
+                  type="number"
+                  value={editRecordData.opening_birds}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, opening_birds: Number(e.target.value) })}
+                  required
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="input-label">Mortality (Deaths)</label>
+                <input
+                  type="number"
+                  value={editRecordData.mortality}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, mortality: Number(e.target.value) })}
+                  min="0"
+                  required
+                  className="input-field text-rose-700 font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="input-label">Culls</label>
+                <input
+                  type="number"
+                  value={editRecordData.culls}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, culls: Number(e.target.value) })}
+                  min="0"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="input-label">Bird Sales</label>
+                <input
+                  type="number"
+                  value={editRecordData.bird_sales}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, bird_sales: Number(e.target.value) })}
+                  min="0"
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="input-label">Other Removals</label>
+                <input
+                  type="number"
+                  value={editRecordData.other_removals}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, other_removals: Number(e.target.value) })}
+                  min="0"
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="input-label">Feed Consumed (kg)</label>
+                <input
+                  type="number"
+                  value={editRecordData.feed_consumed_kg}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, feed_consumed_kg: Number(e.target.value) })}
+                  min="1"
+                  required
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="input-label">Water Consumed (L)</label>
+                <input
+                  type="number"
+                  value={editRecordData.water_consumed_litres}
+                  onChange={(e) => setEditRecordData({ ...editRecordData, water_consumed_litres: Number(e.target.value) })}
+                  min="0"
+                  className="input-field"
+                />
+              </div>
+            </div>
+
+            {editingRecord.egg_count !== undefined && (
+              <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200/80 space-y-3">
+                <span className="text-xs font-bold text-amber-900 block">Layer Egg Production</span>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="input-label">Total Eggs</label>
+                    <input
+                      type="number"
+                      value={editRecordData.egg_count}
+                      onChange={(e) => setEditRecordData({ ...editRecordData, egg_count: Number(e.target.value) })}
+                      min="0"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">Damaged Eggs</label>
+                    <input
+                      type="number"
+                      value={editRecordData.damaged_eggs}
+                      onChange={(e) => setEditRecordData({ ...editRecordData, damaged_eggs: Number(e.target.value) })}
+                      min="0"
+                      className="input-field text-rose-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="input-label">Broken Eggs</label>
+                    <input
+                      type="number"
+                      value={editRecordData.broken_eggs}
+                      onChange={(e) => setEditRecordData({ ...editRecordData, broken_eggs: Number(e.target.value) })}
+                      min="0"
+                      className="input-field text-rose-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="input-label">Health Observations & Notes</label>
+              <textarea
+                value={editRecordData.health_observations}
+                onChange={(e) => setEditRecordData({ ...editRecordData, health_observations: e.target.value })}
+                rows={2}
+                className="input-field"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn-primary">
+                Save Daily Record Changes
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete Daily Record Confirmation Modal */}
+      {deleteTargetRecord && (
+        <DeleteConfirmModal
+          isOpen={true}
+          onClose={() => setDeleteTargetRecord(null)}
+          onConfirm={handleConfirmDeleteRecord}
+          title={`Delete Daily Record — ${deleteTargetRecord.shed_code}`}
+          recordType="Daily Log"
+          recordIdentifier={`${deleteTargetRecord.shed_code} on ${deleteTargetRecord.record_date} (Closing: ${formatNumber(deleteTargetRecord.closing_birds)} birds)`}
+          warningMessage={`Are you sure you want to delete the daily log for ${deleteTargetRecord.shed_code} on ${deleteTargetRecord.record_date}?`}
+          consequences={[
+            `Closing bird delta of ${deleteTargetRecord.closing_birds - deleteTargetRecord.opening_birds} will be safely reverted`,
+            deleteTargetRecord.egg_count
+              ? `Egg collection of ${formatNumber(deleteTargetRecord.egg_count)} eggs will be deducted from warehouse inventory`
+              : 'Flock live count will restore to previous opening balance',
+            'Full audit record will be logged with your timestamp',
+          ]}
+          confirmButtonText="Confirm Delete & Revert"
+        />
+      )}
     </div>
   );
 }

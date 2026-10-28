@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useFarm } from '@/lib/data/FarmContext';
 import Badge from '@/components/ui/Badge';
 import ExportButtons from '@/components/ui/ExportButtons';
+import { formatDateTime } from '@/lib/utils/formatters';
 import {
   History,
   ShieldAlert,
@@ -15,11 +16,9 @@ import {
 } from 'lucide-react';
 
 export default function AuditLogsPage() {
-  const { auditLogs, approvalRequests, reviewApprovalRequest, currentUser } = useFarm();
+  const { auditLogs, approvalRequests, reviewApprovalRequest, currentUser, isAdmin } = useFarm();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'audit' | 'approvals'>('audit');
-
-  const isAdmin = currentUser.role === 'owner_admin';
 
   const filteredLogs = auditLogs.filter(
     (a) =>
@@ -116,7 +115,7 @@ export default function AuditLogsPage() {
                 {filteredLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50">
                     <td className="py-3 px-4 font-mono text-slate-500">
-                      {new Date(log.timestamp).toLocaleString()}
+                      {formatDateTime(log.timestamp)}
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-900">{log.actor_name}</td>
                     <td className="py-3 px-4">
@@ -160,7 +159,7 @@ export default function AuditLogsPage() {
                       </Badge>
                     </div>
                     <p className="text-xs text-slate-600 mt-1">
-                      <strong>Requested By:</strong> {req.requested_by_name} • {new Date(req.created_at).toLocaleString()}
+                      <strong>Requested By:</strong> {req.requested_by_name} • {formatDateTime(req.created_at)}
                     </p>
                     <p className="text-xs text-slate-700 mt-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
                       <strong>Reason:</strong> {req.reason}

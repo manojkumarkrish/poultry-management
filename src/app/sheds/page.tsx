@@ -3,26 +3,32 @@
 import React, { useState } from 'react';
 import { useFarm } from '@/lib/data/FarmContext';
 import { Shed, ShedType, ShedStatus } from '@/types/database';
+import { formatNumber } from '@/lib/utils/formatters';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 import ExportButtons from '@/components/ui/ExportButtons';
 import {
   Home,
   Plus,
   Edit,
+  Trash2,
   AlertTriangle,
   Search,
   Filter,
   Users,
   ShieldAlert,
+  CheckCircle2,
 } from 'lucide-react';
 
 export default function ShedManagementPage() {
-  const { sheds, addShed, updateShed, currentUser } = useFarm();
+  const { sheds, addShed, updateShed, deleteShed, currentUser, canEdit, canDelete } = useFarm();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingShed, setEditingShed] = useState<Shed | null>(null);
+  const [deleteTargetShed, setDeleteTargetShed] = useState<Shed | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -39,8 +45,6 @@ export default function ShedManagementPage() {
   });
 
   const [formError, setFormError] = useState<string | null>(null);
-
-  const canEdit = currentUser.role === 'owner_admin';
 
   // Calculations
   const totalCapacity = sheds.reduce((sum, s) => sum + s.capacity, 0);
@@ -109,7 +113,7 @@ export default function ShedManagementPage() {
     if (editingShed) {
       if (formData.capacity < editingShed.current_birds) {
         setFormError(
-          `Cannot reduce capacity to ${formData.capacity.toLocaleString()} because shed currently holds ${editingShed.current_birds.toLocaleString()} live birds.`
+          `Cannot reduce capacity to ${formatNumber(formData.capacity)} because shed currently holds ${formatNumber(editingShed.current_birds)} live birds.`
         );
         return;
       }
@@ -145,6 +149,23 @@ export default function ShedManagementPage() {
     }
 
     setIsModalOpen(false);
+    setFeedbackMsg({
+      type: 'success',
+      text: editingShed ? `Shed ${editingShed.code} updated successfully.` : `Shed ${formData.code.toUpperCase()} added successfully.`,
+    });
+    setTimeout(() => setFeedbackMsg(null), 3500);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTargetShed) return;
+    const res = deleteShed(deleteTargetShed.id);
+    if (!res.success) {
+      setFeedbackMsg({ type: 'error', text: res.error || 'Failed to delete shed.' });
+    } else {
+      setFeedbackMsg({ type: 'success', text: `Shed ${deleteTargetShed.code} was safely removed.` });
+    }
+    setDeleteTargetShed(null);
+    setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
   return (
@@ -152,14 +173,16 @@ export default function ShedManagementPage() {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Shed Management</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+            Kasthuri Poultry Farm — Shed Management
+          </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Monitor and configure the 8 physical sheds (L1–L5 Layer, G1–G2 Grower, C1 Chick)
+            Configure physical sheds, manage capacities, assigned flocks, and shed managers
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ExportButtons data={sheds} filename="sheds-roster" />
-          {canEdit && (
+          <ExportButtons data={sheds} filename="kpf-sheds-roster" />
+          {canEdit() && (
             <button onClick={handleOpenAdd} className="btn-primary gap-2">
               <Plus className="w-4 h-4" />
               <span>Add New Shed</span>
@@ -168,21 +191,38 @@ export default function ShedManagementPage() {
         </div>
       </div>
 
+      {feedbackMsg && (
+        <div
+          className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+            feedbackMsg.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          {feedbackMsg.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+          )}
+          <span>{feedbackMsg.text}</span>
+        </div>
+      )}
+
       {/* Summary KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="stat-card">
           <span className="text-xs font-semibold text-slate-500 uppercase">Total Sheds</span>
           <div className="text-2xl font-bold text-slate-900 mt-1">{sheds.length}</div>
-          <span className="text-xs text-emerald-600 font-medium">8 Physical Units</span>
+          <span className="text-xs text-emerald-600 font-medium">{sheds.filter((s) => s.status === 'active').length} Active Units</span>
         </div>
         <div className="stat-card">
           <span className="text-xs font-semibold text-slate-500 uppercase">Total Farm Capacity</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1">{totalCapacity.toLocaleString()}</div>
-          <span className="text-xs text-slate-500 font-medium">Target: ~100,000 Birds</span>
+          <div className="text-2xl font-bold text-slate-900 mt-1">{formatNumber(totalCapacity)}</div>
+          <span className="text-xs text-slate-500 font-medium">Configured maximum capacity</span>
         </div>
         <div className="stat-card">
           <span className="text-xs font-semibold text-slate-500 uppercase">Current Live Birds</span>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">{totalBirds.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{formatNumber(totalBirds)}</div>
           <span className="text-xs text-slate-500 font-medium">Active in rearing & lay</span>
         </div>
         <div className="stat-card">
@@ -217,9 +257,9 @@ export default function ShedManagementPage() {
             className="input-field py-2 text-xs w-full sm:w-44"
           >
             <option value="all">All Shed Types</option>
-            <option value="layer">Layer Sheds (L1–L5)</option>
-            <option value="grower">Grower Sheds (G1–G2)</option>
-            <option value="chick">Chick Brooder (C1)</option>
+            <option value="layer">Layer Sheds</option>
+            <option value="grower">Grower Sheds</option>
+            <option value="chick">Chick Brooders</option>
           </select>
         </div>
       </div>
@@ -274,10 +314,10 @@ export default function ShedManagementPage() {
                   </div>
                   <div className="flex justify-between items-center text-xs text-slate-600 mt-2">
                     <span>
-                      Live: <strong className="text-slate-900">{shed.current_birds.toLocaleString()}</strong>
+                      Live: <strong className="text-slate-900">{formatNumber(shed.current_birds)}</strong>
                     </span>
                     <span>
-                      Cap: <strong className="text-slate-900">{shed.capacity.toLocaleString()}</strong>
+                      Cap: <strong className="text-slate-900">{formatNumber(shed.capacity)}</strong>
                     </span>
                   </div>
                 </div>
@@ -300,17 +340,31 @@ export default function ShedManagementPage() {
                 <span className="text-[10px] text-slate-400">
                   Updated: {new Date(shed.updated_at).toLocaleDateString()}
                 </span>
-                {canEdit ? (
-                  <button
-                    onClick={() => handleOpenEdit(shed)}
-                    className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1"
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
-                ) : (
-                  <span className="text-[10px] text-slate-400 italic">View Only</span>
-                )}
+                <div className="flex items-center gap-2">
+                  {canEdit() && (
+                    <button
+                      onClick={() => handleOpenEdit(shed)}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 p-1 hover:bg-emerald-50 rounded transition-colors"
+                      title="Edit shed configuration"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                  {canDelete() && (
+                    <button
+                      onClick={() => setDeleteTargetShed(shed)}
+                      className="text-xs text-slate-400 hover:text-rose-600 font-semibold flex items-center gap-1 p-1 hover:bg-rose-50 rounded transition-colors"
+                      title={shed.current_birds > 0 ? "Holds active flock (Safe deletion blocked)" : "Delete empty shed"}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  )}
+                  {!canEdit() && !canDelete() && (
+                    <span className="text-[10px] text-slate-400 italic">View Only</span>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -447,6 +501,35 @@ export default function ShedManagementPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Shed Modal */}
+      {deleteTargetShed && (
+        <DeleteConfirmModal
+          isOpen={true}
+          onClose={() => setDeleteTargetShed(null)}
+          onConfirm={handleConfirmDelete}
+          title={`Delete Shed — ${deleteTargetShed.code}`}
+          recordType="Shed"
+          recordIdentifier={`${deleteTargetShed.code}: ${deleteTargetShed.name}`}
+          warningMessage={
+            deleteTargetShed.current_birds > 0
+              ? `Warning: Shed ${deleteTargetShed.code} currently holds ${formatNumber(deleteTargetShed.current_birds)} live birds. Unsafe deletion is blocked to prevent corrupting flock counts. Please transfer birds or deactivate the shed.`
+              : `Are you sure you want to permanently delete Shed ${deleteTargetShed.code}? This will remove it from the roster.`
+          }
+          consequences={
+            deleteTargetShed.current_birds > 0
+              ? [
+                  `Active birds present: ${formatNumber(deleteTargetShed.current_birds)} birds`,
+                  'Flock safety rule: Shed must be completely emptied via transfer before deletion',
+                ]
+              : [
+                  'Shed capacity will be deducted from farm target capacity',
+                  'Immutable audit trail will record this deletion',
+                ]
+          }
+          confirmButtonText={deleteTargetShed.current_birds > 0 ? 'Cannot Delete (Flock Present)' : 'Delete Empty Shed'}
+        />
+      )}
     </div>
   );
 }

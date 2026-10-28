@@ -3,9 +3,11 @@
 import React, { useState } from 'react';
 import { useFarm } from '@/lib/data/FarmContext';
 import { Customer } from '@/types/database';
+import { formatNumber, formatCurrency } from '@/lib/utils/formatters';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import ExportButtons from '@/components/ui/ExportButtons';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 import {
   Users,
   Plus,
@@ -16,14 +18,42 @@ import {
   CreditCard,
   Receipt,
   AlertCircle,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 
 export default function CustomersPage() {
-  const { customers, addCustomer, eggSales, birdSales, recordPayment, currentUser } = useFarm();
+  const {
+    customers,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    eggSales,
+    birdSales,
+    recordPayment,
+    currentUser,
+    canEdit,
+    canDelete,
+  } = useFarm();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Feedback Notification
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 5000);
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -54,19 +84,78 @@ export default function CustomersPage() {
       (c.address && c.address.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const handleCreateCustomer = (e: React.FormEvent) => {
-    e.preventDefault();
-    addCustomer({
-      name: formData.name,
-      phone: formData.phone,
-      email: formData.email,
-      customer_type: formData.customer_type,
-      opening_balance: Number(formData.opening_balance),
-      current_balance: Number(formData.opening_balance),
-      credit_limit: Number(formData.credit_limit),
-      address: formData.address,
+  const handleOpenAddCustomer = () => {
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      customer_type: 'egg_buyer',
+      opening_balance: 0,
+      credit_limit: 500000,
+      address: '',
     });
+    setEditingCustomer(null);
+    setIsCustomerModalOpen(true);
+  };
+
+  const handleOpenEditCustomer = (cust: Customer) => {
+    setFormData({
+      name: cust.name,
+      phone: cust.phone,
+      email: cust.email || '',
+      customer_type: cust.customer_type,
+      opening_balance: cust.opening_balance,
+      credit_limit: cust.credit_limit,
+      address: cust.address || '',
+    });
+    setEditingCustomer(cust);
+    setIsCustomerModalOpen(true);
+  };
+
+  const handleSaveCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingCustomer) {
+      const res = updateCustomer(editingCustomer.id, {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        customer_type: formData.customer_type,
+        credit_limit: Number(formData.credit_limit),
+        address: formData.address,
+      });
+
+      if (!res.success) {
+        showNotification('error', res.error || 'Failed to update customer.');
+        return;
+      }
+      showNotification('success', `Customer account "${formData.name}" updated successfully.`);
+    } else {
+      addCustomer({
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        customer_type: formData.customer_type,
+        opening_balance: Number(formData.opening_balance),
+        current_balance: Number(formData.opening_balance),
+        credit_limit: Number(formData.credit_limit),
+        address: formData.address,
+      });
+      showNotification('success', `Customer account "${formData.name}" registered successfully.`);
+    }
+
     setIsCustomerModalOpen(false);
+    setEditingCustomer(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingCustomer) return;
+    const res = deleteCustomer(deletingCustomer.id);
+    if (!res.success) {
+      showNotification('error', res.error || 'Failed to delete customer.');
+    } else {
+      showNotification('success', `Customer account "${deletingCustomer.name}" deleted.`);
+    }
+    setDeletingCustomer(null);
   };
 
   const handleOpenReceipt = (cust: Customer) => {
@@ -99,11 +188,35 @@ export default function CustomersPage() {
       recorded_by: currentUser.id,
     });
 
+    showNotification('success', `Recorded receipt of ${formatCurrency(paymentData.amount)} from ${selectedCustomer.name}.`);
     setIsPaymentModalOpen(false);
   };
 
   return (
     <div className="space-y-6">
+      {/* Feedback Banner */}
+      {feedback && (
+        <div
+          className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between shadow-xs ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+            )}
+            <span>{feedback.message}</span>
+          </div>
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600">
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -116,8 +229,8 @@ export default function CustomersPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ExportButtons data={customers} filename="customers-roster" />
-          <button onClick={() => setIsCustomerModalOpen(true)} className="btn-primary gap-2">
+          <ExportButtons data={customers} filename="kpf-customers-roster" />
+          <button onClick={handleOpenAddCustomer} className="btn-primary gap-2">
             <Plus className="w-4 h-4" />
             <span>Add Customer Account</span>
           </button>
@@ -129,7 +242,7 @@ export default function CustomersPage() {
         <div className="stat-card">
           <span className="text-xs font-semibold text-slate-500 uppercase">Total Receivables</span>
           <div className="text-2xl font-bold text-rose-600 mt-1">
-            ₹{totalReceivables.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {formatCurrency(totalReceivables, { maximumFractionDigits: 0 })}
           </div>
           <span className="text-xs text-slate-500 font-medium">Outstanding buyer balances</span>
         </div>
@@ -173,18 +286,38 @@ export default function CustomersPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="text-sm font-bold text-slate-900">{cust.name}</h3>
-                    <Badge variant="info">
-                      {cust.customer_type === 'egg_buyer'
-                        ? 'Egg Wholesaler'
-                        : cust.customer_type === 'bird_buyer'
-                        ? 'Bird Trader'
-                        : 'Eggs & Birds'}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <Badge variant="info">
+                        {cust.customer_type === 'egg_buyer'
+                          ? 'Egg Wholesaler'
+                          : cust.customer_type === 'bird_buyer'
+                          ? 'Bird Trader'
+                          : 'Eggs & Birds'}
+                      </Badge>
+                      {canEdit() && (
+                        <button
+                          onClick={() => handleOpenEditCustomer(cust)}
+                          className="p-1 text-slate-400 hover:text-emerald-600 rounded"
+                          title="Edit Customer Details"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {canDelete() && (
+                        <button
+                          onClick={() => setDeletingCustomer(cust)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                          title="Delete Customer Account"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <span className="text-[10px] font-semibold text-slate-400 uppercase">Balance Due</span>
                     <div className="text-base font-black text-rose-600">
-                      ₹{cust.current_balance.toLocaleString()}
+                      {formatCurrency(cust.current_balance)}
                     </div>
                   </div>
                 </div>
@@ -211,7 +344,7 @@ export default function CustomersPage() {
                 <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-500">
                   <span>Credit Limit:</span>
                   <span className="font-semibold text-slate-800">
-                    ₹{cust.credit_limit.toLocaleString()}
+                    {formatCurrency(cust.credit_limit)}
                   </span>
                 </div>
               </div>
@@ -231,16 +364,24 @@ export default function CustomersPage() {
             </div>
           );
         })}
+        {filteredCustomers.length === 0 && (
+          <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+            No customer accounts found. Click &quot;Add Customer&quot; to register a buyer.
+          </div>
+        )}
       </div>
 
-      {/* Add Customer Modal */}
+      {/* Add / Edit Customer Modal */}
       <Modal
         isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        title="Add Customer / Buyer Account"
+        onClose={() => {
+          setIsCustomerModalOpen(false);
+          setEditingCustomer(null);
+        }}
+        title={editingCustomer ? `Edit Customer: ${editingCustomer.name}` : 'Add Customer / Buyer Account'}
         subtitle="Register new egg merchant or live bird trader"
       >
-        <form onSubmit={handleCreateCustomer} className="space-y-4">
+        <form onSubmit={handleSaveCustomer} className="space-y-4">
           <div>
             <label className="input-label">Customer / Trading Name</label>
             <input
@@ -280,15 +421,28 @@ export default function CustomersPage() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="input-label">Opening Balance (₹)</label>
-              <input
-                type="number"
-                value={formData.opening_balance}
-                onChange={(e) => setFormData({ ...formData, opening_balance: Number(e.target.value) })}
-                className="input-field"
-              />
-            </div>
+            {!editingCustomer ? (
+              <div>
+                <label className="input-label">Opening Balance (₹)</label>
+                <input
+                  type="number"
+                  value={formData.opening_balance}
+                  onChange={(e) => setFormData({ ...formData, opening_balance: Number(e.target.value) })}
+                  className="input-field"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="input-label">Contact Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="accounts@wholesaler.com"
+                  className="input-field"
+                />
+              </div>
+            )}
             <div>
               <label className="input-label">Credit Limit (₹)</label>
               <input
@@ -313,11 +467,18 @@ export default function CustomersPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={() => setIsCustomerModalOpen(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setIsCustomerModalOpen(false);
+                setEditingCustomer(null);
+              }}
+              className="btn-secondary"
+            >
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              Register Customer
+              {editingCustomer ? 'Save Customer Changes' : 'Register Customer'}
             </button>
           </div>
         </form>
@@ -328,7 +489,7 @@ export default function CustomersPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         title={`Receive Payment — ${selectedCustomer?.name}`}
-        subtitle={`Current Ledger Outstanding: ₹${selectedCustomer?.current_balance.toLocaleString()}`}
+        subtitle={`Current Ledger Outstanding: ${formatCurrency(selectedCustomer?.current_balance)}`}
       >
         <form onSubmit={handleSavePayment} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -401,6 +562,19 @@ export default function CustomersPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Confirmation: Delete Customer */}
+      <DeleteConfirmModal
+        isOpen={!!deletingCustomer}
+        onClose={() => setDeletingCustomer(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Customer Account"
+        recordIdentifier={deletingCustomer ? `${deletingCustomer.name} (${deletingCustomer.customer_type})` : ''}
+        consequences={[
+          'The customer account will be removed from the active roster.',
+          'Deletions are automatically blocked if the customer has an outstanding balance or unpaid invoices.',
+        ]}
+      />
     </div>
   );
 }

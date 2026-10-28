@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { formatNumber } from '@/lib/utils/formatters';
 
 interface StatCardProps {
   title: string;
@@ -10,6 +11,7 @@ interface StatCardProps {
   trend?: {
     value: string;
     isPositive: boolean;
+    label?: string;
   };
   highlightColor?: 'emerald' | 'amber' | 'blue' | 'purple' | 'rose' | 'slate';
   isFinancial?: boolean;
@@ -46,7 +48,9 @@ export default function StatCard({
         <div className="flex-1">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900">{value}</span>
+            <span className="text-2xl font-bold tracking-tight text-slate-900">
+              {typeof value === 'number' ? formatNumber(value) : value}
+            </span>
             {subValue && <span className="text-xs text-slate-500 font-medium">{subValue}</span>}
           </div>
           {trend && (
@@ -58,7 +62,7 @@ export default function StatCard({
               >
                 {trend.isPositive ? '↑' : '↓'} {trend.value}
               </span>
-              <span className="text-slate-400">vs target</span>
+              <span className="text-slate-400">{trend.label || 'vs target'}</span>
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useFarm } from '@/lib/data/FarmContext';
 import Badge from '@/components/ui/Badge';
+import { formatDateTime } from '@/lib/utils/formatters';
 import {
   Bell,
   CheckCircle2,
@@ -80,7 +81,7 @@ export default function NotificationsPage() {
                   </div>
                   <p className="text-xs text-slate-600 mt-1 leading-relaxed">{n.message}</p>
                   <span className="text-[10px] text-slate-400 mt-2 block">
-                    {new Date(n.created_at).toLocaleString()}
+                    {formatDateTime(n.created_at)}
                   </span>
                 </div>
               </div>

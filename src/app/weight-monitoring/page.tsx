@@ -6,6 +6,7 @@ import { WeightRecord } from '@/types/database';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import ExportButtons from '@/components/ui/ExportButtons';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
 import {
   Scale,
   Plus,
@@ -14,12 +15,38 @@ import {
   TrendingUp,
   TrendingDown,
   Calendar,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react';
 
 export default function WeightMonitoringPage() {
-  const { weightRecords, addWeightRecord, batches, sheds, currentUser } = useFarm();
+  const {
+    weightRecords,
+    addWeightRecord,
+    updateWeightRecord,
+    deleteWeightRecord,
+    batches,
+    sheds,
+    currentUser,
+    canEdit,
+    canDelete,
+  } = useFarm();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<WeightRecord | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<WeightRecord | null>(null);
+
+  // Feedback Notification
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 5000);
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -36,29 +63,95 @@ export default function WeightMonitoringPage() {
 
   const selectedBatch = batches.find((b) => b.id === formData.batchId);
 
+  const handleOpenAdd = () => {
+    setFormData({
+      batchId: batches[0]?.id || '',
+      sampleDate: new Date().toISOString().split('T')[0],
+      birdsSampled: 100,
+      averageWeightGrams: 820,
+      minWeightGrams: 770,
+      maxWeightGrams: 870,
+      targetWeightGrams: 810,
+      ageDays: 75,
+      notes: 'Uniform growth observed across sample tiers',
+    });
+    setEditingRecord(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (w: WeightRecord) => {
+    setFormData({
+      batchId: w.batch_id,
+      sampleDate: w.sample_date,
+      birdsSampled: w.birds_sampled,
+      averageWeightGrams: w.average_weight_grams,
+      minWeightGrams: w.min_weight_grams || w.average_weight_grams - 50,
+      maxWeightGrams: w.max_weight_grams || w.average_weight_grams + 50,
+      targetWeightGrams: w.target_weight_grams,
+      ageDays: w.age_days,
+      notes: w.notes || '',
+    });
+    setEditingRecord(w);
+    setIsModalOpen(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBatch) return;
+    const batch = selectedBatch || batches.find((b) => b.id === (editingRecord ? editingRecord.batch_id : ''));
+    if (!batch) return;
 
     const diff = formData.averageWeightGrams - formData.targetWeightGrams;
 
-    addWeightRecord({
-      batch_id: selectedBatch.id,
-      batch_code: selectedBatch.batch_code,
-      shed_id: selectedBatch.current_shed_id,
-      shed_code: selectedBatch.current_shed_code,
-      sample_date: formData.sampleDate,
-      birds_sampled: Number(formData.birdsSampled),
-      average_weight_grams: Number(formData.averageWeightGrams),
-      min_weight_grams: Number(formData.minWeightGrams),
-      max_weight_grams: Number(formData.maxWeightGrams),
-      target_weight_grams: Number(formData.targetWeightGrams),
-      difference_grams: diff,
-      age_days: Number(formData.ageDays),
-      notes: formData.notes,
-    });
+    if (editingRecord) {
+      const res = updateWeightRecord(editingRecord.id, {
+        sample_date: formData.sampleDate,
+        birds_sampled: Number(formData.birdsSampled),
+        average_weight_grams: Number(formData.averageWeightGrams),
+        min_weight_grams: Number(formData.minWeightGrams),
+        max_weight_grams: Number(formData.maxWeightGrams),
+        target_weight_grams: Number(formData.targetWeightGrams),
+        difference_grams: diff,
+        age_days: Number(formData.ageDays),
+        notes: formData.notes,
+      });
+
+      if (!res.success) {
+        showNotification('error', res.error || 'Failed to update weight audit.');
+        return;
+      }
+      showNotification('success', `Weight sample for ${batch.batch_code} updated.`);
+    } else {
+      addWeightRecord({
+        batch_id: batch.id,
+        batch_code: batch.batch_code,
+        shed_id: batch.current_shed_id,
+        shed_code: batch.current_shed_code,
+        sample_date: formData.sampleDate,
+        birds_sampled: Number(formData.birdsSampled),
+        average_weight_grams: Number(formData.averageWeightGrams),
+        min_weight_grams: Number(formData.minWeightGrams),
+        max_weight_grams: Number(formData.maxWeightGrams),
+        target_weight_grams: Number(formData.targetWeightGrams),
+        difference_grams: diff,
+        age_days: Number(formData.ageDays),
+        notes: formData.notes,
+      });
+      showNotification('success', `Recorded body weight sample for ${batch.batch_code} (${formData.averageWeightGrams}g).`);
+    }
 
     setIsModalOpen(false);
+    setEditingRecord(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingRecord) return;
+    const res = deleteWeightRecord(deletingRecord.id);
+    if (!res.success) {
+      showNotification('error', res.error || 'Failed to delete weight audit.');
+    } else {
+      showNotification('success', `Weight audit for ${deletingRecord.batch_code} removed.`);
+    }
+    setDeletingRecord(null);
   };
 
   const filteredRecords = weightRecords.filter(
@@ -70,6 +163,29 @@ export default function WeightMonitoringPage() {
 
   return (
     <div className="space-y-6">
+      {/* Feedback Banner */}
+      {feedback && (
+        <div
+          className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between shadow-xs ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+            )}
+            <span>{feedback.message}</span>
+          </div>
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600">
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -82,8 +198,8 @@ export default function WeightMonitoringPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ExportButtons data={weightRecords} filename="weight-audit-records" />
-          <button onClick={() => setIsModalOpen(true)} className="btn-primary gap-2">
+          <ExportButtons data={weightRecords} filename="kpf-weight-audit-records" />
+          <button onClick={handleOpenAdd} className="btn-primary gap-2">
             <Plus className="w-4 h-4" />
             <span>Record Weight Sample</span>
           </button>
@@ -125,59 +241,87 @@ export default function WeightMonitoringPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
-              <th className="py-3 px-4">Sample Date</th>
-              <th className="py-3 px-4">Flock & Shed</th>
-              <th className="py-3 px-4 text-right">Age (Days)</th>
-              <th className="py-3 px-4 text-right">Birds Sampled</th>
-              <th className="py-3 px-4 text-right">Actual Avg Wt (g)</th>
-              <th className="py-3 px-4 text-right">Breed Target (g)</th>
-              <th className="py-3 px-4 text-right">Variance</th>
-              <th className="py-3 px-4">Notes</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {filteredRecords.map((w) => {
-              const isAhead = w.difference_grams >= 0;
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse min-w-[850px]">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
+                <th className="py-3 px-4">Sample Date</th>
+                <th className="py-3 px-4">Flock & Shed</th>
+                <th className="py-3 px-4 text-right">Age (Days)</th>
+                <th className="py-3 px-4 text-right">Birds Sampled</th>
+                <th className="py-3 px-4 text-right">Actual Avg Wt (g)</th>
+                <th className="py-3 px-4 text-right">Breed Target (g)</th>
+                <th className="py-3 px-4 text-right">Variance</th>
+                <th className="py-3 px-4">Notes</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredRecords.map((w) => {
+                const isAhead = w.difference_grams >= 0;
 
-              return (
-                <tr key={w.id} className="hover:bg-slate-50">
-                  <td className="py-3 px-4 font-semibold text-slate-800">{w.sample_date}</td>
-                  <td className="py-3 px-4">
-                    <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
-                      {w.shed_code}
-                    </span>
-                    <span className="text-[11px] text-slate-500 block mt-0.5">{w.batch_code}</span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-medium text-slate-700">{w.age_days}d</td>
-                  <td className="py-3 px-4 text-right text-slate-600">{w.birds_sampled} birds</td>
-                  <td className="py-3 px-4 text-right font-bold text-slate-900">{w.average_weight_grams} g</td>
-                  <td className="py-3 px-4 text-right text-slate-500">{w.target_weight_grams} g</td>
-                  <td className="py-3 px-4 text-right font-bold">
-                    <span
-                      className={`inline-flex items-center gap-1 ${
-                        isAhead ? 'text-emerald-700' : 'text-rose-600'
-                      }`}
-                    >
-                      {isAhead ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      <span>{w.difference_grams > 0 ? `+${w.difference_grams}` : w.difference_grams} g</span>
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-slate-500">{w.notes}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                return (
+                  <tr key={w.id} className="hover:bg-slate-50">
+                    <td className="py-3 px-4 font-semibold text-slate-800">{w.sample_date}</td>
+                    <td className="py-3 px-4">
+                      <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                        {w.shed_code}
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">{w.batch_code}</span>
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-slate-700">{w.age_days}d</td>
+                    <td className="py-3 px-4 text-right text-slate-600">{w.birds_sampled} birds</td>
+                    <td className="py-3 px-4 text-right font-bold text-slate-900">{w.average_weight_grams} g</td>
+                    <td className="py-3 px-4 text-right text-slate-500">{w.target_weight_grams} g</td>
+                    <td className="py-3 px-4 text-right font-bold">
+                      <span
+                        className={`inline-flex items-center gap-1 ${
+                          isAhead ? 'text-emerald-700' : 'text-rose-600'
+                        }`}
+                      >
+                        {isAhead ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                        <span>{w.difference_grams > 0 ? `+${w.difference_grams}` : w.difference_grams} g</span>
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-500 max-w-xs truncate">{w.notes}</td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {canEdit(w.sample_date) && (
+                          <button
+                            onClick={() => handleOpenEdit(w)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                            title="Edit Sample Record"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete() && (
+                          <button
+                            onClick={() => setDeletingRecord(w)}
+                            className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors"
+                            title="Delete Sample Record"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* Modal: Record Sample */}
+      {/* Modal: Record / Edit Sample */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Record Flock Weight Sample"
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingRecord(null);
+        }}
+        title={editingRecord ? `Edit Weight Audit: ${editingRecord.batch_code}` : 'Record Flock Weight Sample'}
         subtitle="Sample random crates across front, middle and rear battery cages"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -187,6 +331,7 @@ export default function WeightMonitoringPage() {
               value={formData.batchId}
               onChange={(e) => setFormData({ ...formData, batchId: e.target.value })}
               className="input-field font-semibold"
+              disabled={!!editingRecord}
             >
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -276,15 +421,35 @@ export default function WeightMonitoringPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false);
+                setEditingRecord(null);
+              }}
+              className="btn-secondary"
+            >
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              Save Weight Record
+              {editingRecord ? 'Save Changes' : 'Save Weight Record'}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* Confirmation: Delete Weight Record */}
+      <DeleteConfirmModal
+        isOpen={!!deletingRecord}
+        onClose={() => setDeletingRecord(null)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Weight Sample Audit"
+        recordIdentifier={deletingRecord ? `${deletingRecord.batch_code} (${deletingRecord.shed_code}) — ${deletingRecord.average_weight_grams}g on ${deletingRecord.sample_date}` : ''}
+        consequences={[
+          'The body weight sample record will be removed.',
+          'Growth curve and breed uniformity graphs will adjust immediately.',
+        ]}
+      />
     </div>
   );
 }

@@ -12,7 +12,7 @@ interface ExportButtonsProps {
 
 export default function ExportButtons({
   data,
-  filename = 'farm-export',
+  filename = 'kpf-export',
   onPrint,
   title = 'Export',
 }: ExportButtonsProps) {
@@ -22,9 +22,12 @@ export default function ExportButtons({
       return;
     }
 
-    // Extract headers
+    // Extract headers with Kasthuri Poultry Farm official record prefix
     const headers = Object.keys(data[0]);
-    const csvRows = [headers.join(',')];
+    const csvRows = [
+      `# Kasthuri Poultry Farm (KPF) - Official System Record - Generated: ${new Date().toISOString()}`,
+      headers.join(','),
+    ];
 
     for (const row of data) {
       const values = headers.map((header) => {

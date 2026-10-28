@@ -3,9 +3,12 @@
 import React, { useState } from 'react';
 import { useFarm } from '@/lib/data/FarmContext';
 import { Supplier, SupplierBill, PaymentStatus } from '@/types/database';
+import { formatNumber, formatCurrency } from '@/lib/utils/formatters';
 import Badge from '@/components/ui/Badge';
 import Modal from '@/components/ui/Modal';
 import ExportButtons from '@/components/ui/ExportButtons';
+import DeleteConfirmModal from '@/components/ui/DeleteConfirmModal';
+import PrintBillModal from '@/components/ui/PrintBillModal';
 import {
   Truck,
   Plus,
@@ -16,18 +19,55 @@ import {
   Mail,
   MapPin,
   Calendar,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Printer,
 } from 'lucide-react';
 
 export default function SuppliersPurchasesPage() {
-  const { suppliers, addSupplier, supplierBills, createSupplierBill, recordPayment, currentUser } = useFarm();
+  const {
+    suppliers,
+    addSupplier,
+    updateSupplier,
+    deleteSupplier,
+    supplierBills,
+    createSupplierBill,
+    updateSupplierBill,
+    deleteSupplierBill,
+    recordPayment,
+    currentUser,
+    canEdit,
+    canDelete,
+  } = useFarm();
+
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Modals
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null);
+
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const [editingBill, setEditingBill] = useState<SupplierBill | null>(null);
+  const [deletingBill, setDeletingBill] = useState<SupplierBill | null>(null);
+  const [printingBill, setPrintingBill] = useState<SupplierBill | null>(null);
+
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
-  // New Supplier Form
-  const [newSupp, setNewSupp] = useState({
+  // Feedback Notification
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => setFeedback(null), 5000);
+  };
+
+  // Supplier Form
+  const [suppForm, setSuppForm] = useState({
     code: '',
     name: '',
     phone: '',
@@ -37,8 +77,8 @@ export default function SuppliersPurchasesPage() {
     address: '',
   });
 
-  // New Bill Form
-  const [billData, setBillData] = useState({
+  // Bill Form
+  const [billForm, setBillForm] = useState({
     supplierId: suppliers[0]?.id || '',
     billNo: `BILL-${Date.now().toString().slice(-5)}`,
     billDate: new Date().toISOString().split('T')[0],
@@ -67,46 +107,169 @@ export default function SuppliersPurchasesPage() {
       s.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCreateSupplier = (e: React.FormEvent) => {
-    e.preventDefault();
-    addSupplier({
-      code: newSupp.code.toUpperCase(),
-      name: newSupp.name,
-      phone: newSupp.phone,
-      email: newSupp.email,
-      category: newSupp.category,
-      opening_balance: Number(newSupp.opening_balance),
-      current_balance: Number(newSupp.opening_balance),
-      address: newSupp.address,
+  // --- Supplier Handlers ---
+  const handleOpenAddSupplier = () => {
+    setSuppForm({
+      code: '',
+      name: '',
+      phone: '',
+      email: '',
+      category: 'feed_ingredients',
+      opening_balance: 0,
+      address: '',
     });
-    setIsSupplierModalOpen(false);
+    setEditingSupplier(null);
+    setIsSupplierModalOpen(true);
   };
 
-  const handleCreateBill = (e: React.FormEvent) => {
+  const handleOpenEditSupplier = (supp: Supplier) => {
+    setSuppForm({
+      code: supp.code,
+      name: supp.name,
+      phone: supp.phone,
+      email: supp.email || '',
+      category: supp.category,
+      opening_balance: supp.opening_balance,
+      address: supp.address || '',
+    });
+    setEditingSupplier(supp);
+    setIsSupplierModalOpen(true);
+  };
+
+  const handleSaveSupplier = (e: React.FormEvent) => {
     e.preventDefault();
-    const supp = suppliers.find((s) => s.id === billData.supplierId);
+    if (editingSupplier) {
+      const res = updateSupplier(editingSupplier.id, {
+        code: suppForm.code.toUpperCase(),
+        name: suppForm.name,
+        phone: suppForm.phone,
+        email: suppForm.email,
+        category: suppForm.category,
+        address: suppForm.address,
+      });
+      if (!res.success) {
+        showNotification('error', res.error || 'Failed to update supplier.');
+        return;
+      }
+      showNotification('success', `Supplier "${suppForm.name}" updated successfully.`);
+    } else {
+      addSupplier({
+        code: suppForm.code.toUpperCase(),
+        name: suppForm.name,
+        phone: suppForm.phone,
+        email: suppForm.email,
+        category: suppForm.category,
+        opening_balance: Number(suppForm.opening_balance),
+        current_balance: Number(suppForm.opening_balance),
+        address: suppForm.address,
+      });
+      showNotification('success', `Supplier "${suppForm.name}" registered successfully.`);
+    }
+    setIsSupplierModalOpen(false);
+    setEditingSupplier(null);
+  };
+
+  const handleConfirmDeleteSupplier = () => {
+    if (!deletingSupplier) return;
+    const res = deleteSupplier(deletingSupplier.id);
+    if (!res.success) {
+      showNotification('error', res.error || 'Failed to delete supplier.');
+    } else {
+      showNotification('success', `Supplier "${deletingSupplier.name}" deleted.`);
+    }
+    setDeletingSupplier(null);
+  };
+
+  // --- Bill Handlers ---
+  const handleOpenAddBill = () => {
+    setBillForm({
+      supplierId: suppliers[0]?.id || '',
+      billNo: `BILL-${Date.now().toString().slice(-5)}`,
+      billDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
+      itemsSummary: '10 MT Yellow Maize (Moisture < 12%)',
+      totalAmount: 235000,
+      paidAmount: 50000,
+      notes: 'Direct mill delivery via trailer',
+    });
+    setEditingBill(null);
+    setIsBillModalOpen(true);
+  };
+
+  const handleOpenEditBill = (bill: SupplierBill) => {
+    setBillForm({
+      supplierId: bill.supplier_id,
+      billNo: bill.bill_no,
+      billDate: bill.bill_date,
+      dueDate: bill.due_date || '',
+      itemsSummary: bill.items_summary,
+      totalAmount: bill.total_amount,
+      paidAmount: bill.paid_amount,
+      notes: bill.notes || '',
+    });
+    setEditingBill(bill);
+    setIsBillModalOpen(true);
+  };
+
+  const handleSaveBill = (e: React.FormEvent) => {
+    e.preventDefault();
+    const supp = suppliers.find((s) => s.id === billForm.supplierId);
     if (!supp) return;
 
-    const outstanding = Math.max(0, billData.totalAmount - billData.paidAmount);
-    const status: PaymentStatus = outstanding === 0 ? 'paid' : billData.paidAmount > 0 ? 'partial' : 'unpaid';
+    const outstanding = Math.max(0, billForm.totalAmount - billForm.paidAmount);
+    const status: PaymentStatus = outstanding === 0 ? 'paid' : billForm.paidAmount > 0 ? 'partial' : 'unpaid';
 
-    createSupplierBill({
-      bill_no: billData.billNo,
-      supplier_id: supp.id,
-      supplier_name: supp.name,
-      bill_date: billData.billDate,
-      due_date: billData.dueDate,
-      items_summary: billData.itemsSummary,
-      total_amount: Number(billData.totalAmount),
-      paid_amount: Number(billData.paidAmount),
-      outstanding_amount: outstanding,
-      payment_status: status,
-      notes: billData.notes,
-    });
+    if (editingBill) {
+      const res = updateSupplierBill(editingBill.id, {
+        bill_no: billForm.billNo,
+        bill_date: billForm.billDate,
+        due_date: billForm.dueDate,
+        items_summary: billForm.itemsSummary,
+        total_amount: Number(billForm.totalAmount),
+        paid_amount: Number(billForm.paidAmount),
+        outstanding_amount: outstanding,
+        payment_status: status,
+        notes: billForm.notes,
+      });
+
+      if (!res.success) {
+        showNotification('error', res.error || 'Failed to update bill.');
+        return;
+      }
+      showNotification('success', `Purchase Bill ${editingBill.bill_no} updated successfully.`);
+    } else {
+      createSupplierBill({
+        bill_no: billForm.billNo,
+        supplier_id: supp.id,
+        supplier_name: supp.name,
+        bill_date: billForm.billDate,
+        due_date: billForm.dueDate,
+        items_summary: billForm.itemsSummary,
+        total_amount: Number(billForm.totalAmount),
+        paid_amount: Number(billForm.paidAmount),
+        outstanding_amount: outstanding,
+        payment_status: status,
+        notes: billForm.notes,
+      });
+      showNotification('success', `Purchase Bill ${billForm.billNo} posted. Accounts payable updated.`);
+    }
 
     setIsBillModalOpen(false);
+    setEditingBill(null);
   };
 
+  const handleConfirmDeleteBill = () => {
+    if (!deletingBill) return;
+    const res = deleteSupplierBill(deletingBill.id);
+    if (!res.success) {
+      showNotification('error', res.error || 'Failed to delete bill.');
+    } else {
+      showNotification('success', `Purchase Bill ${deletingBill.bill_no} removed and payable reversed.`);
+    }
+    setDeletingBill(null);
+  };
+
+  // --- Disbursement Handler ---
   const handleOpenDisbursement = (supp: Supplier) => {
     setSelectedSupplier(supp);
     setPayData({
@@ -137,11 +300,35 @@ export default function SuppliersPurchasesPage() {
       recorded_by: currentUser.id,
     });
 
+    showNotification('success', `Disbursed ${formatCurrency(payData.amount)} to ${selectedSupplier.name}.`);
     setIsPaymentModalOpen(false);
   };
 
   return (
     <div className="space-y-6">
+      {/* Feedback Banner */}
+      {feedback && (
+        <div
+          className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between shadow-xs ${
+            feedback.type === 'success'
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600" />
+            )}
+            <span>{feedback.message}</span>
+          </div>
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600">
+            <XCircle className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -154,12 +341,12 @@ export default function SuppliersPurchasesPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ExportButtons data={suppliers} filename="suppliers-payables" />
-          <button onClick={() => setIsBillModalOpen(true)} className="btn-secondary gap-1.5 text-xs">
+          <ExportButtons data={suppliers} filename="kpf-suppliers-payables" />
+          <button onClick={handleOpenAddBill} className="btn-secondary gap-1.5 text-xs">
             <Receipt className="w-4 h-4" />
             <span>Record Purchase Bill</span>
           </button>
-          <button onClick={() => setIsSupplierModalOpen(true)} className="btn-primary gap-1.5 text-xs">
+          <button onClick={handleOpenAddSupplier} className="btn-primary gap-1.5 text-xs">
             <Plus className="w-4 h-4" />
             <span>Add Supplier</span>
           </button>
@@ -171,7 +358,7 @@ export default function SuppliersPurchasesPage() {
         <div className="stat-card">
           <span className="text-xs font-semibold text-slate-500 uppercase">Total Payables</span>
           <div className="text-2xl font-bold text-rose-600 mt-1">
-            ₹{totalPayables.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            {formatCurrency(totalPayables, { maximumFractionDigits: 0 })}
           </div>
           <span className="text-xs text-slate-500 font-medium">Farm debt to suppliers</span>
         </div>
@@ -214,7 +401,27 @@ export default function SuppliersPurchasesPage() {
                   <span className="text-[10px] font-mono font-bold text-slate-400 uppercase">{supp.code}</span>
                   <h3 className="text-sm font-bold text-slate-900 mt-0.5">{supp.name}</h3>
                 </div>
-                <Badge variant="purple">{supp.category.replace('_', ' ').toUpperCase()}</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge variant="purple">{supp.category.replace('_', ' ').toUpperCase()}</Badge>
+                  {canEdit() && (
+                    <button
+                      onClick={() => handleOpenEditSupplier(supp)}
+                      className="p-1 text-slate-400 hover:text-emerald-600 rounded"
+                      title="Edit Supplier"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {canDelete() && (
+                    <button
+                      onClick={() => setDeletingSupplier(supp)}
+                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                      title="Delete Supplier"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="mt-3 text-xs text-slate-600 space-y-1">
@@ -233,7 +440,7 @@ export default function SuppliersPurchasesPage() {
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-xs text-slate-500">Payable Balance:</span>
                 <span className="text-sm font-black text-rose-600">
-                  ₹{supp.current_balance.toLocaleString()}
+                  {formatCurrency(supp.current_balance)}
                 </span>
               </div>
             </div>
@@ -249,6 +456,11 @@ export default function SuppliersPurchasesPage() {
             </div>
           </div>
         ))}
+        {filteredSuppliers.length === 0 && (
+          <div className="col-span-full py-12 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+            No supplier accounts found. Click &quot;Add Supplier&quot; to register a vendor.
+          </div>
+        )}
       </div>
 
       {/* Recent Supplier Bills Table */}
@@ -262,7 +474,7 @@ export default function SuppliersPurchasesPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase">
                   <th className="py-2.5 px-3">Bill No & Date</th>
@@ -272,6 +484,7 @@ export default function SuppliersPurchasesPage() {
                   <th className="py-2.5 px-3 text-right">Paid (₹)</th>
                   <th className="py-2.5 px-3 text-right">Outstanding (₹)</th>
                   <th className="py-2.5 px-3 text-center">Status</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -284,18 +497,48 @@ export default function SuppliersPurchasesPage() {
                     <td className="py-2.5 px-3 font-semibold text-slate-800">{b.supplier_name}</td>
                     <td className="py-2.5 px-3 text-slate-600">{b.items_summary}</td>
                     <td className="py-2.5 px-3 text-right font-bold text-slate-900">
-                      ₹{b.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {formatCurrency(b.total_amount, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                      ₹{b.paid_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {formatCurrency(b.paid_amount, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-2.5 px-3 text-right font-bold text-rose-600">
-                      ₹{b.outstanding_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {formatCurrency(b.outstanding_amount, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <Badge variant={b.payment_status === 'paid' ? 'success' : 'warning'}>
                         {b.payment_status.toUpperCase()}
                       </Badge>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setPrintingBill(b)}
+                          className="p-1.5 text-slate-500 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors inline-flex items-center gap-1"
+                          title="Print Supplier Purchase Bill"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="text-[11px] font-semibold text-blue-700 hidden sm:inline">Print Bill</span>
+                        </button>
+                        {canEdit(b.bill_date) && (
+                          <button
+                            onClick={() => handleOpenEditBill(b)}
+                            className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors"
+                            title="Edit Purchase Bill"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete(true) && (
+                          <button
+                            onClick={() => setDeletingBill(b)}
+                            className="p-1.5 text-slate-500 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors"
+                            title="Delete / Cancel Bill"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -305,21 +548,24 @@ export default function SuppliersPurchasesPage() {
         )}
       </div>
 
-      {/* Modal: Add Supplier */}
+      {/* Modal: Add / Edit Supplier */}
       <Modal
         isOpen={isSupplierModalOpen}
-        onClose={() => setIsSupplierModalOpen(false)}
-        title="Add Supplier / Vendor Account"
+        onClose={() => {
+          setIsSupplierModalOpen(false);
+          setEditingSupplier(null);
+        }}
+        title={editingSupplier ? `Edit Supplier: ${editingSupplier.name}` : 'Add Supplier / Vendor Account'}
         subtitle="Hatchery, grain trader, mineral manufacturer, or pharma vendor"
       >
-        <form onSubmit={handleCreateSupplier} className="space-y-4">
+        <form onSubmit={handleSaveSupplier} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="input-label">Supplier Code</label>
               <input
                 type="text"
-                value={newSupp.code}
-                onChange={(e) => setNewSupp({ ...newSupp, code: e.target.value })}
+                value={suppForm.code}
+                onChange={(e) => setSuppForm({ ...suppForm, code: e.target.value })}
                 placeholder="SUPP-AGRO"
                 required
                 className="input-field font-mono uppercase"
@@ -329,8 +575,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Company / Firm Name</label>
               <input
                 type="text"
-                value={newSupp.name}
-                onChange={(e) => setNewSupp({ ...newSupp, name: e.target.value })}
+                value={suppForm.name}
+                onChange={(e) => setSuppForm({ ...suppForm, name: e.target.value })}
                 placeholder="e.g. Godrej Agrovet Ltd"
                 required
                 className="input-field"
@@ -343,8 +589,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Contact Phone</label>
               <input
                 type="text"
-                value={newSupp.phone}
-                onChange={(e) => setNewSupp({ ...newSupp, phone: e.target.value })}
+                value={suppForm.phone}
+                onChange={(e) => setSuppForm({ ...suppForm, phone: e.target.value })}
                 placeholder="+91 22 2500..."
                 required
                 className="input-field"
@@ -353,8 +599,8 @@ export default function SuppliersPurchasesPage() {
             <div>
               <label className="input-label">Supply Category</label>
               <select
-                value={newSupp.category}
-                onChange={(e) => setNewSupp({ ...newSupp, category: e.target.value as any })}
+                value={suppForm.category}
+                onChange={(e) => setSuppForm({ ...suppForm, category: e.target.value as any })}
                 className="input-field"
               >
                 <option value="feed_ingredients">Raw Feed Ingredients (Maize/Soya)</option>
@@ -366,53 +612,66 @@ export default function SuppliersPurchasesPage() {
             </div>
           </div>
 
-          <div>
-            <label className="input-label">Opening Payable Balance (₹)</label>
-            <input
-              type="number"
-              value={newSupp.opening_balance}
-              onChange={(e) => setNewSupp({ ...newSupp, opening_balance: Number(e.target.value) })}
-              className="input-field"
-            />
-          </div>
+          {!editingSupplier && (
+            <div>
+              <label className="input-label">Opening Payable Balance (₹)</label>
+              <input
+                type="number"
+                value={suppForm.opening_balance}
+                onChange={(e) => setSuppForm({ ...suppForm, opening_balance: Number(e.target.value) })}
+                className="input-field"
+              />
+            </div>
+          )}
 
           <div>
             <label className="input-label">Address / Plant Location</label>
             <textarea
-              value={newSupp.address}
-              onChange={(e) => setNewSupp({ ...newSupp, address: e.target.value })}
+              value={suppForm.address}
+              onChange={(e) => setSuppForm({ ...suppForm, address: e.target.value })}
               rows={2}
               className="input-field"
             />
           </div>
 
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={() => setIsSupplierModalOpen(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSupplierModalOpen(false);
+                setEditingSupplier(null);
+              }}
+              className="btn-secondary"
+            >
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              Register Supplier
+              {editingSupplier ? 'Save Supplier Changes' : 'Register Supplier'}
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Modal: Record Purchase Bill */}
+      {/* Modal: Record / Edit Purchase Bill */}
       <Modal
         isOpen={isBillModalOpen}
-        onClose={() => setIsBillModalOpen(false)}
-        title="Record Supplier Purchase Bill"
-        subtitle="Log incoming raw materials, update stock liability, and avoid double counting"
+        onClose={() => {
+          setIsBillModalOpen(false);
+          setEditingBill(null);
+        }}
+        title={editingBill ? `Edit Purchase Bill: ${editingBill.bill_no}` : 'Record Supplier Purchase Bill'}
+        subtitle="Log incoming raw materials, update stock liability, and track balances"
         maxWidth="lg"
       >
-        <form onSubmit={handleCreateBill} className="space-y-4">
+        <form onSubmit={handleSaveBill} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="input-label">Select Vendor</label>
               <select
-                value={billData.supplierId}
-                onChange={(e) => setBillData({ ...billData, supplierId: e.target.value })}
+                value={billForm.supplierId}
+                onChange={(e) => setBillForm({ ...billForm, supplierId: e.target.value })}
                 className="input-field font-semibold"
+                disabled={!!editingBill}
               >
                 {suppliers.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -425,8 +684,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Vendor Bill / Invoice #</label>
               <input
                 type="text"
-                value={billData.billNo}
-                onChange={(e) => setBillData({ ...billData, billNo: e.target.value })}
+                value={billForm.billNo}
+                onChange={(e) => setBillForm({ ...billForm, billNo: e.target.value })}
                 required
                 className="input-field font-mono uppercase"
               />
@@ -438,8 +697,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Bill Date</label>
               <input
                 type="date"
-                value={billData.billDate}
-                onChange={(e) => setBillData({ ...billData, billDate: e.target.value })}
+                value={billForm.billDate}
+                onChange={(e) => setBillForm({ ...billForm, billDate: e.target.value })}
                 className="input-field"
               />
             </div>
@@ -447,8 +706,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Payment Due Date</label>
               <input
                 type="date"
-                value={billData.dueDate}
-                onChange={(e) => setBillData({ ...billData, dueDate: e.target.value })}
+                value={billForm.dueDate}
+                onChange={(e) => setBillForm({ ...billForm, dueDate: e.target.value })}
                 className="input-field"
               />
             </div>
@@ -458,8 +717,8 @@ export default function SuppliersPurchasesPage() {
             <label className="input-label">Items Summary / Specification</label>
             <input
               type="text"
-              value={billData.itemsSummary}
-              onChange={(e) => setBillData({ ...billData, itemsSummary: e.target.value })}
+              value={billForm.itemsSummary}
+              onChange={(e) => setBillForm({ ...billForm, itemsSummary: e.target.value })}
               placeholder="e.g. 15 MT Soya Meal DOC 46%"
               required
               className="input-field"
@@ -471,8 +730,8 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Total Bill Amount (₹)</label>
               <input
                 type="number"
-                value={billData.totalAmount}
-                onChange={(e) => setBillData({ ...billData, totalAmount: Number(e.target.value) })}
+                value={billForm.totalAmount}
+                onChange={(e) => setBillForm({ ...billForm, totalAmount: Number(e.target.value) })}
                 min="1"
                 required
                 className="input-field font-bold text-base"
@@ -482,21 +741,38 @@ export default function SuppliersPurchasesPage() {
               <label className="input-label">Advance / Paid Amount (₹)</label>
               <input
                 type="number"
-                value={billData.paidAmount}
-                onChange={(e) => setBillData({ ...billData, paidAmount: Number(e.target.value) })}
+                value={billForm.paidAmount}
+                onChange={(e) => setBillForm({ ...billForm, paidAmount: Number(e.target.value) })}
                 min="0"
-                max={billData.totalAmount}
+                max={billForm.totalAmount}
                 className="input-field font-bold text-emerald-700"
               />
             </div>
           </div>
 
+          <div>
+            <label className="input-label">Notes</label>
+            <input
+              type="text"
+              value={billForm.notes}
+              onChange={(e) => setBillForm({ ...billForm, notes: e.target.value })}
+              className="input-field"
+            />
+          </div>
+
           <div className="flex justify-end gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={() => setIsBillModalOpen(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => {
+                setIsBillModalOpen(false);
+                setEditingBill(null);
+              }}
+              className="btn-secondary"
+            >
               Cancel
             </button>
             <button type="submit" className="btn-primary">
-              Post Purchase Bill
+              {editingBill ? 'Save Changes' : 'Post Purchase Bill'}
             </button>
           </div>
         </form>
@@ -507,7 +783,7 @@ export default function SuppliersPurchasesPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         title={`Disburse Payment — ${selectedSupplier?.name}`}
-        subtitle={`Current Ledger Payable: ₹${selectedSupplier?.current_balance.toLocaleString()}`}
+        subtitle={`Current Ledger Payable: ${formatCurrency(selectedSupplier?.current_balance)}`}
       >
         <form onSubmit={handleSaveDisbursement} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
@@ -569,6 +845,40 @@ export default function SuppliersPurchasesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Confirmation: Delete Supplier */}
+      <DeleteConfirmModal
+        isOpen={!!deletingSupplier}
+        onClose={() => setDeletingSupplier(null)}
+        onConfirm={handleConfirmDeleteSupplier}
+        title="Delete Supplier Account"
+        recordIdentifier={deletingSupplier ? `${deletingSupplier.name} (${deletingSupplier.code})` : ''}
+        consequences={[
+          'The supplier account will be removed from your vendor list.',
+          'Deletions are automatically blocked if the supplier has a non-zero payable balance.',
+        ]}
+      />
+
+      {/* Confirmation: Delete Bill */}
+      <DeleteConfirmModal
+        isOpen={!!deletingBill}
+        onClose={() => setDeletingBill(null)}
+        onConfirm={handleConfirmDeleteBill}
+        title="Delete Purchase Bill"
+        recordIdentifier={deletingBill ? `${deletingBill.bill_no} (${deletingBill.supplier_name}) — ${formatCurrency(deletingBill.total_amount)}` : ''}
+        consequences={[
+          'The purchase invoice will be permanently removed.',
+          `Supplier payable balance will be reversed by the unpaid portion of ${formatCurrency(deletingBill?.outstanding_amount)}.`,
+        ]}
+      />
+
+      {/* Printable Supplier Purchase Bill Modal */}
+      <PrintBillModal
+        isOpen={!!printingBill}
+        onClose={() => setPrintingBill(null)}
+        billType="supplier_bill"
+        data={printingBill}
+      />
     </div>
   );
 }
