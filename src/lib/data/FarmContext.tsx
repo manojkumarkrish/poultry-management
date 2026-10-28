@@ -795,7 +795,10 @@ export function FarmProvider({
 
       return { success: true };
     } catch (e: any) {
-      return { success: false, error: e.message || 'Login failed. Please try again.' };
+      const msg = e?.message === 'fetch failed'
+        ? 'Authentication service is temporarily unreachable. Please check your network connection.'
+        : (e?.message || 'Login failed. Please try again.');
+      return { success: false, error: msg };
     }
   };
 

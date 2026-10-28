@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server';
 import {
   createSignedSessionToken,
   DEFAULT_CREDENTIALS_SEED,
@@ -21,54 +21,57 @@ export async function POST(request: Request) {
 
     const normalizedEmail = rawEmail.toLowerCase().trim();
 
-    // 1. Check if Supabase client is configured and active
-    const supabase = createServerSupabaseClient();
-    if (supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: normalizedEmail,
-        password,
-      });
+    // 1. If Supabase is fully configured, attempt Supabase Auth first
+    if (isSupabaseConfigured() && normalizedEmail.includes('@')) {
+      try {
+        const supabase = createServerSupabaseClient();
+        if (supabase) {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
 
-      if (error) {
-        return NextResponse.json(
-          { success: false, error: error.message },
-          { status: 401 }
-        );
+          if (!error && data?.user) {
+            const role = data.user?.user_metadata?.role === 'owner_admin' ? 'owner_admin' : 'manager';
+            const userId = data.user?.id || 'u-user';
+            const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+            const signedToken = await createSignedSessionToken(userId, role, expiresAt);
+
+            const response = NextResponse.json({
+              success: true,
+              user: data.user,
+              session: data.session,
+              role,
+              userId,
+              token: signedToken,
+            });
+
+            response.cookies.set('kpf_session', signedToken, {
+              path: '/',
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: 'lax',
+              httpOnly: false,
+            });
+            response.cookies.set('kpf_role', role, {
+              path: '/',
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: 'lax',
+              httpOnly: false,
+            });
+            response.cookies.set('kpf_user_id', userId, {
+              path: '/',
+              maxAge: 7 * 24 * 60 * 60,
+              sameSite: 'lax',
+              httpOnly: false,
+            });
+
+            return response;
+          }
+        }
+      } catch (supabaseErr: any) {
+        // Log warning but gracefully fall back to local enterprise farm credentials
+        console.warn('Supabase Auth signIn unavailable or errored, falling back:', supabaseErr?.message || supabaseErr);
       }
-
-      const role = data.user?.user_metadata?.role === 'owner_admin' ? 'owner_admin' : 'manager';
-      const userId = data.user?.id || 'u-user';
-      const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      const signedToken = await createSignedSessionToken(userId, role, expiresAt);
-
-      const response = NextResponse.json({
-        success: true,
-        user: data.user,
-        session: data.session,
-        role,
-        token: signedToken,
-      });
-
-      response.cookies.set('kpf_session', signedToken, {
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        sameSite: 'lax',
-        httpOnly: false,
-      });
-      response.cookies.set('kpf_role', role, {
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        sameSite: 'lax',
-        httpOnly: false,
-      });
-      response.cookies.set('kpf_user_id', userId, {
-        path: '/',
-        maxAge: 7 * 24 * 60 * 60,
-        sameSite: 'lax',
-        httpOnly: false,
-      });
-
-      return response;
     }
 
     // 2. Enterprise Local/Hybrid Verification (Server-authoritative check)
@@ -141,8 +144,12 @@ export async function POST(request: Request) {
 
     return response;
   } catch (error: any) {
+    const errorMsg = error?.message === 'fetch failed'
+      ? 'Unable to connect to authentication server. Please verify your connection.'
+      : (error?.message || 'Internal authentication error');
+
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal authentication error' },
+      { success: false, error: errorMsg },
       { status: 500 }
     );
   }

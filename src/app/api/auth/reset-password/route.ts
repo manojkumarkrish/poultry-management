@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server';
 
 export async function POST(request: Request) {
   try {
@@ -12,14 +12,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServerSupabaseClient();
-    if (supabase) {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login?reset=true`,
-      });
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createServerSupabaseClient();
+        if (supabase) {
+          const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/login?reset=true`,
+          });
 
-      if (error) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 400 });
+          if (error) {
+            console.warn('Supabase resetPasswordForEmail notice:', error.message);
+          }
+        }
+      } catch (err) {
+        // Fall back to farm self-service notice
       }
     }
 
@@ -29,7 +35,7 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Reset request failed' },
+      { success: false, error: error?.message || 'Reset request failed' },
       { status: 500 }
     );
   }

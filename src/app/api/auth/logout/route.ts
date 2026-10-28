@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server';
 
 export async function POST() {
   try {
-    const supabase = createServerSupabaseClient();
-    if (supabase) {
-      await supabase.auth.signOut();
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createServerSupabaseClient();
+        if (supabase) {
+          await supabase.auth.signOut();
+        }
+      } catch (e) {
+        // Ignore supabase signout errors during session clearance
+      }
     }
 
     const response = NextResponse.json({
@@ -22,11 +28,15 @@ export async function POST() {
       path: '/',
       maxAge: 0,
     });
+    response.cookies.set('kpf_user_id', '', {
+      path: '/',
+      maxAge: 0,
+    });
 
     return response;
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Logout failed' },
+      { success: false, error: error?.message || 'Logout failed' },
       { status: 500 }
     );
   }

@@ -87,10 +87,16 @@ export default function LoginPage() {
         const destination = getTargetUrl();
         window.location.href = destination;
       } else {
-        setErrorMessage(res.error || 'Invalid credentials. Please verify your email and password.');
+        const msg = res.error === 'fetch failed'
+          ? 'Unable to reach the authentication service. Please check your network connection.'
+          : (res.error || 'Invalid credentials. Please verify your email and password.');
+        setErrorMessage(msg);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'An unexpected error occurred during login. Please try again.');
+      const msg = err?.message === 'fetch failed'
+        ? 'Unable to reach the authentication service. Please check your network connection.'
+        : (err?.message || 'An unexpected error occurred during login. Please try again.');
+      setErrorMessage(msg);
     } finally {
       setLoading(false);
     }
